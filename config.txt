@@ -1,0 +1,210 @@
+# ========================= RASPBERRY PI MONSTER CONFIG =========================
+# Everything non-standard is commented out so you can enable it at will.
+# Lines marked (DEFAULT) are from your base file and left enabled.
+# ==============================================================================
+# Docs: http://rptl.io/configtxt
+# Overlay docs live at: /boot/firmware/overlays/README
+# ==============================================================================
+
+
+# ---------------------------- Core I/O + Audio --------------------------------
+# Uncomment to enable optional busses
+#dtparam=i2c_arm=on                 # I²C on GPIO2/3 (SDA/SCL) @ default 100 kHz
+#dtparam=i2c_arm_baudrate=400000    # I²C fast-mode 400 kHz (requires dtparam=i2c_arm=on)
+#dtparam=i2s=on                      # I²S audio interface (for DACs/ADCs)
+dtparam=spi=on                       # (DEFAULT) SPI0 on GPIO7-11 (CE1/CE0/MISO/MOSI/SCLK)
+
+# Enable audio
+dtparam=audio=on                     # (DEFAULT) Loads snd_bcm2835 (PWM or HDMI audio under KMS)
+
+# -------------------------- Camera / Display Autodetect -----------------------
+camera_auto_detect=1                 # (DEFAULT) Autoload IMX/other CSI camera overlays
+display_auto_detect=1                # (DEFAULT) Autoload DSI display overlays when present
+auto_initramfs=1                     # (DEFAULT) Load initramfs automatically if present
+
+# ------------------------------ Graphics Stack --------------------------------
+dtoverlay=vc4-kms-v3d                # (DEFAULT) Full KMS VC4/VC6 driver (Pi 4/5 use this)
+max_framebuffers=2                   # (DEFAULT) Allow double framebuffers
+disable_fw_kms_setup=1               # (DEFAULT) Let kernel decide video modes (no firmware 'video=')
+
+# Legacy/fake KMS fallback (uncomment both to try legacy display path)
+#dtoverlay=vc4-fkms-v3d              # Fake-KMS (legacy). Helps some old HDMI panels.
+#disable_fw_kms_setup=0
+
+# Force HDMI even if no monitor is detected (headless capture boxes, KVMs)
+#hdmi_force_hotplug=1
+
+# Pick an explicit HDMI mode (example: 1080p60 CEA)
+#hdmi_group=1                        # 1=CEA (TV), 2=DMT (monitor)
+#hdmi_mode=16                        # 1080p60 if group=1
+
+# Underscan/overscan
+disable_overscan=1                   # (DEFAULT) No overscan padding
+
+# ------------------------------ CPU / System ----------------------------------
+arm_64bit=1                          # (DEFAULT) 64-bit kernel
+arm_boost=1                          # (DEFAULT) Run as fast as firmware/board allows
+
+# Overclocking (you already had this set; keeping as-is)
+# NOTE: Aggressive settings can corrupt SD under brownouts. You’ve been warned.
+# For Pi 4/400 typical safe-ish: arm_freq 2000, gpu_freq 600-750, over_voltage 6-8.
+# For Pi 5, use different knobs (arm_freq_min/max via 5’s firmware governors).
+# ------------------------------------------------------------------------------
+# Your existing block:
+#Pigro_Overclocking4
+arm_freq=2000                        # CPU freq in MHz (Pi 4/400)
+gpu_freq=750                         # V3D/HEVC clock (MHz)
+over_voltage=7                       # Core overvolt (units of ~0.025 V)
+disable_splash=1                     # Hide rainbow splash at boot
+force_turbo=0                        # 1 forces max freq always (voids warranty counters)
+initial_turbo=60                     # Seconds of turbo at boot to speed init
+
+# ------------------------------- Status LEDs ----------------------------------
+# (DEFAULT) fun LED heartbeats
+dtparam=pwr_led_trigger=heartbeat
+dtparam=act_led_trigger=heartbeat
+
+# ------------------------------- USB Modes ------------------------------------
+[cm4]
+otg_mode=1                           # (DEFAULT) XHCI host on CM4 (remove if you need gadget/DWC2)
+
+[cm5]
+dtoverlay=dwc2,dr_mode=host          # (DEFAULT) Pi 5: DWC2 host mode for USB OTG header
+
+
+[all]
+# ============================== CAN BUS OVERLAYS ===============================
+# SocketCAN via SPI controllers. Requires SPI enabled (dtparam=spi=on, already set).
+# After enabling, load can modules (Bookworm auto-loads via DT):
+#   sudo apt install can-utils
+#   ip link set can0 up type can bitrate 500000
+#   cansend can0 123#DEADBEEF
+#
+# --- MCP2515 (classical CAN 2.0A/B) on SPI0 CE0 (GPIO8), 16 MHz crystal, IRQ on GPIO25:
+#dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25,spimaxfrequency=10000000
+# ^ CE pin defaults to CE0; change with 'cs' param if needed (e.g., cs=1 for CE1/GPIO7).
+#
+# --- Second MCP2515 on SPI0 CE1 with IRQ on GPIO24 (two-channel CAN: can0+can1):
+#dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=24,spimaxfrequency=10000000
+#
+# --- MCP2517FD / MCP2518FD (CAN-FD capable) using mcp251xfd driver:
+#dtoverlay=mcp251xfd-can0,oscillator=40000000,interrupt=25,spi-clock=10000000
+#dtoverlay=mcp251xfd-can1,oscillator=40000000,interrupt=24,spi-clock=10000000
+# Note: Many CAN-FD HATs use 40 MHz xtal. Check your board and IRQ pin.
+#
+# --- Waveshare 2-CH CAN HAT quick example (often MCP2515 x2, 16 MHz, CE0/CE1, IRQs 25/24):
+#dtoverlay=mcp2515-can0,oscillator=16000000,interrupt=25
+#dtoverlay=mcp2515-can1,oscillator=16000000,interrupt=24
+#
+# SPI pin swaps / extra chip selects if your HAT uses non-default CS:
+#dtoverlay=spi0-1cs                   # Make SPI0 with only CE0
+#dtoverlay=spi0-2cs                   # SPI0 with CE0+CE1 (default on most Pis)
+#dtoverlay=spi0-3cs                   # SPI0 with CE0+CE1+CE2 (CE2 on GPIO16 needs wiring)
+#dtoverlay=spi1-3cs                   # Enable SPI1 with 3 chip selects (GPIOs 16/17/18/19… varies)
+#dtoverlay=spi2-3cs                   # Enable SPI2 with 3 chip selects (Pi 4/5 have these ALT funcs)
+#
+# If you need to free GPIOs or move IRQ: change 'interrupt=' above to any free input pin.
+
+
+# ================================ UART / Serial ================================
+# enable_uart holds the serial console / device availability. On Pi 3/4/5, PL011 vs mini-UART matters.
+#enable_uart=1                        # Enable primary UART (/dev/ttyAMA0 or /dev/ttyS0 depending config)
+#
+# Free up the PL011 for your use by DISABLING Bluetooth (routes BT HCI to mini-UART):
+#dtoverlay=disable-bt                 # Disables BT so PL011 maps to GPIO14/15 for stable baud
+#core_freq_min=250                    # Keep mini-UART baud stable if you *use* ttyS0 (when BT enabled)
+#
+# Move the serial console off the main UART (recommended if you need it for devices):
+#cmdline=console=tty1                 # (In cmdline.txt, not here) Switch console to HDMI only
+
+
+# ================================ I²C Goodies =================================
+#dtparam=i2c_arm=on                   # I²C on pins 3/5
+#dtparam=i2c_arm_baudrate=400000      # Speed up to 400 kHz
+#
+# Common RTCs over I²C:
+#dtoverlay=i2c-rtc,ds3231             # DS3231 battery-backed RTC
+#dtoverlay=i2c-rtc,pcf8523            # PCF8523 RTC
+#dtoverlay=i2c-rtc,ds1307             # DS1307 RTC (needs 5V -> level shift recommended)
+#
+# Touch & sensors (examples):
+#dtoverlay=goodix                     # Goodix I²C touch controllers
+#dtoverlay=apds9960                   # Gesture/ALS/prox (if HAT provides DT binding)
+
+
+# ================================ 1-Wire / PPS ================================
+#dtoverlay=w1-gpio,gpiopin=4,pullup=on   # 1-Wire on GPIO4 for DS18B20 etc.
+#dtoverlay=pps-gpio,gpiopin=18           # PPS input on GPIO18 (for GPS timing/chrony)
+
+
+# ============================ GPIO Power / Fan / Keys =========================
+# Graceful shutdown via a button to ground (active low):
+#dtoverlay=gpio-shutdown,gpio_pin=3,active_low=1,gpio_pull=up
+#
+# Signal the PSU to cut power after halt:
+#dtoverlay=gpio-poweroff,active_low=1,gpiopin=26
+#
+# Generic GPIO fan (useful in enclosures without PoE HAT):
+#dtoverlay=gpio-fan,gpiopin=14,temp=55000,speed=20000
+#
+# PoE/PoE+ HAT (auto-detects but you can force):
+#dtoverlay=rpi-poe                     # Original PoE HAT fan controller
+#dtoverlay=rpi-poe-plus                # PoE+ HAT fan controller
+
+
+# ================================ SPI Displays ================================
+# Framebuffer SPI display examples (KMS is still primary video):
+#dtoverlay=spi0-1cs
+#dtoverlay=ili9341,spi=0,dc_pin=25,reset_pin=24,led_pin=18,rotate=0,speed=32000000
+#fbcon=map:10 fbcon=font:VGA8x8       # (Put on cmdline.txt) Console on fb1 with small font
+#
+# Waveshare/FBTFT style panels have specific overlays—check overlays/README for your panel.
+
+
+# =============================== Wi-Fi / BT / RF ==============================
+# Country code helps legal channels/Tx power:
+#country=AU
+#
+# Disable radios to save power or noise floor:
+#dtoverlay=disable-wifi
+#dtoverlay=disable-bt
+
+
+# ============================== Storage / USB NICs ============================
+# Some USB3 SATA/NVMe bridges behave better with UAS off:
+#usb-storage.quirks=aaaa:bbbb:u       # (Goes in cmdline.txt) Replace aaaa:bbbb with lsusb VID:PID
+#
+# LAN7800 USB Ethernet tuning (older Pi 3 B+):
+#dtoverlay=lan7800                     # Rarely needed; normally handled by kernel
+
+
+# ============================== Thermal / Power ===============================
+# Force a specific GPU mem split (if you use legacy camera/GL apps; KMS generally ignores this):
+#gpu_mem=128
+#
+# Lower thermal throttling sensitivity (not usually recommended):
+#temp_soft_limit=80
+
+
+# =============================== Pi-5 Specifics ===============================
+# (These are examples; only enable on Pi 5 hardware)
+#[pi5]
+#dtparam=pciex1                       # Enable external PCIe x1 (if carrier exposes it)
+#dtparam=nvme                         # Enable NVMe boot/probing on supported hats/carriers
+#dtparam=pciex1_gen=3                 # Try Gen3 link (falls back if unsupported)
+
+
+# ============================== Boot / Diagnostics ===========================
+# Avoid rainbow splash (you already set disable_splash=1 above)
+#disable_splash=1
+#
+# Extra early boot logging (UART needed):
+#boot_delay=2
+#avoid_warnings=2                     # Suppress low-voltage icon (don’t hide real power issues!)
+
+
+# ============================== Your Working Bits =============================
+# (Left here at the end for easy reference.)
+
+# (DEFAULTS kept enabled at top of file; duplicates avoided.)
+
